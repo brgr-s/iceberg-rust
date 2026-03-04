@@ -290,20 +290,29 @@ pub enum PrimitiveType {
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Hash, Copy)]
 #[serde(rename_all = "lowercase")]
 pub enum EdgeAlgorithm {
-    /// Planar
-    Planar,
+    // Planar - it seems 'planar' edge interpolation does not exist in the spec
+    // see: https://parquet.apache.org/docs/file-format/types/geospatial/
+    // Planar,
     /// Spherical
     Spherical,
     /// Vincenty
     Vincenty,
+    /// Thomas
+    Thomas,
+    /// Andoyer
+    Andoyer,
+    /// Karney
+    Karney,
 }
 
 impl fmt::Display for EdgeAlgorithm {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            EdgeAlgorithm::Planar => write!(f, "planar"),
             EdgeAlgorithm::Spherical => write!(f, "spherical"),
             EdgeAlgorithm::Vincenty => write!(f, "vincenty"),
+            EdgeAlgorithm::Thomas => write!(f, "thomas"),
+            EdgeAlgorithm::Andoyer => write!(f, "andoyer"),
+            EdgeAlgorithm::Karney => write!(f, "karney"),
         }
     }
 }
@@ -468,9 +477,11 @@ where D: Deserializer<'de> {
 
     if let Some((crs, algorithm)) = params.split_once(',') {
         let algorithm = match algorithm.trim().to_lowercase().as_str() {
-            "planar" => EdgeAlgorithm::Planar,
             "spherical" => EdgeAlgorithm::Spherical,
             "vincenty" => EdgeAlgorithm::Vincenty,
+            "thomas" => EdgeAlgorithm::Thomas,
+            "andoyer" => EdgeAlgorithm::Andoyer,
+            "karney" => EdgeAlgorithm::Karney,
             _ => {
                 return Err(D::Error::custom(format!(
                     "Invalid edge algorithm: {algorithm}"
@@ -1410,18 +1421,42 @@ mod tests {
                 None,
             ),
             (
-                "geography(EPSG:4326)",
+                "geography(OGC:CRS84, vincenty)",
                 PrimitiveType::Geography {
-                    crs: "EPSG:4326".to_string(),
-                    algorithm: EdgeAlgorithm::Spherical,
+                    crs: "OGC:CRS84".to_string(),
+                    algorithm: EdgeAlgorithm::Vincenty,
                 },
                 None,
             ),
             (
-                "geography(EPSG:4326, planar)",
+                "geography(OGC:CRS84, thomas)",
+                PrimitiveType::Geography {
+                    crs: "OGC:CRS84".to_string(),
+                    algorithm: EdgeAlgorithm::Thomas,
+                },
+                None,
+            ),
+            (
+                "geography(OGC:CRS84, andoyer)",
+                PrimitiveType::Geography {
+                    crs: "OGC:CRS84".to_string(),
+                    algorithm: EdgeAlgorithm::Andoyer,
+                },
+                None,
+            ),
+            (
+                "geography(OGC:CRS84, karney)",
+                PrimitiveType::Geography {
+                    crs: "OGC:CRS84".to_string(),
+                    algorithm: EdgeAlgorithm::Karney,
+                },
+                None,
+            ),
+            (
+                "geography(EPSG:4326)",
                 PrimitiveType::Geography {
                     crs: "EPSG:4326".to_string(),
-                    algorithm: EdgeAlgorithm::Planar,
+                    algorithm: EdgeAlgorithm::Spherical,
                 },
                 None,
             ),
@@ -1438,6 +1473,30 @@ mod tests {
                 PrimitiveType::Geography {
                     crs: "EPSG:4326".to_string(),
                     algorithm: EdgeAlgorithm::Vincenty,
+                },
+                None,
+            ),
+            (
+                "geography(EPSG:4326, thomas)",
+                PrimitiveType::Geography {
+                    crs: "EPSG:4326".to_string(),
+                    algorithm: EdgeAlgorithm::Thomas,
+                },
+                None,
+            ),
+            (
+                "geography(EPSG:4326, andoyer)",
+                PrimitiveType::Geography {
+                    crs: "EPSG:4326".to_string(),
+                    algorithm: EdgeAlgorithm::Andoyer,
+                },
+                None,
+            ),
+            (
+                "geography(EPSG:4326, karney)",
+                PrimitiveType::Geography {
+                    crs: "EPSG:4326".to_string(),
+                    algorithm: EdgeAlgorithm::Karney,
                 },
                 None,
             ),

@@ -422,7 +422,7 @@ impl SchemaWithPartnerVisitor<ArrayRef> for ArrowArrayToIcebergStructConverter {
                 } else {
                     Err(Error::new(
                         ErrorKind::DataInvalid,
-                        format!("The partner is not a binary array: {:?}", p),
+                        format!("The partner is not a binary array: {p:?}"),
                     ))
                 }
             }

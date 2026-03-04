@@ -1444,7 +1444,7 @@ mod tests {
         ];
 
         for (json, expected_type, expected_json) in pairs {
-            let json_input = format!("\"{}\"", json);
+            let json_input = format!("\"{json}\"");
             let desered_type: PrimitiveType = serde_json::from_str(&json_input).unwrap();
             assert_eq!(desered_type, expected_type);
 

@@ -147,6 +147,24 @@ VALUES
     (3, PARSE_JSON('42'))
 """)
 
+#  Create a table with geometry and geography columns
+spark.sql("""
+CREATE OR REPLACE TABLE rest.default.test_geospatial_columns (
+    id          INT,
+    v_geom_1    GEOMETRY ( 4326 ),
+    v_geog_1    GEOGRAPHY ( 4326 )
+)
+USING iceberg
+TBLPROPERTIES ('format-version'='3')
+""")
+
+spark.sql("""
+INSERT INTO rest.default.test_geospatial_columns
+VALUES
+    (1, st_geofromtext('POINT(1 0)'), st_geogfromtext('POINT Z (1 2 3)'),
+    (2, st_geofromtext('POINT(0 1)'), st_geogfromtext('POINT Z (1 0 1)')
+""")
+
 #  Create a table with various types
 spark.sql("""
 CREATE OR REPLACE TABLE rest.default.types_test USING ICEBERG AS 

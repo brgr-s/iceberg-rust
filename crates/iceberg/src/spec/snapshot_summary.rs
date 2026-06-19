@@ -338,6 +338,7 @@ pub(crate) fn update_snapshot_summaries(
     if summary.operation != Operation::Append
         && summary.operation != Operation::Overwrite
         && summary.operation != Operation::Delete
+        && summary.operation != Operation::Replace
     {
         return Err(Error::new(
             ErrorKind::DataInvalid,
@@ -595,6 +596,83 @@ mod tests {
                 .get(TOTAL_EQUALITY_DELETES)
                 .unwrap(),
             "4"
+        );
+    }
+
+    #[test]
+    fn test_update_snapshot_summaries_replace() {
+        let prev_props: HashMap<String, String> = [
+            (TOTAL_DATA_FILES.to_string(), "10".to_string()),
+            (TOTAL_DELETE_FILES.to_string(), "3".to_string()),
+            (TOTAL_RECORDS.to_string(), "1000".to_string()),
+            (TOTAL_FILE_SIZE.to_string(), "1003".to_string()),
+            (TOTAL_POSITION_DELETES.to_string(), "3".to_string()),
+            (TOTAL_EQUALITY_DELETES.to_string(), "0".to_string()),
+        ]
+        .into_iter()
+        .collect();
+
+        let previous_summary = Summary {
+            operation: Operation::Append,
+            additional_properties: prev_props,
+        };
+
+        let new_props: HashMap<String, String> = [
+            (ADDED_DATA_FILES.to_string(), "1".to_string()),
+            (DELETED_DATA_FILES.to_string(), "10".to_string()),
+            (ADDED_DELETE_FILES.to_string(), "0".to_string()),
+            (REMOVED_DELETE_FILES.to_string(), "0".to_string()),
+            (ADDED_RECORDS.to_string(), "997".to_string()),
+            (DELETED_RECORDS.to_string(), "1000".to_string()),
+            (ADDED_FILE_SIZE.to_string(), "997".to_string()),
+            (REMOVED_FILE_SIZE.to_string(), "1000".to_string()),
+            (ADDED_POSITION_DELETES.to_string(), "0".to_string()),
+            (REMOVED_POSITION_DELETES.to_string(), "0".to_string()),
+            (ADDED_EQUALITY_DELETES.to_string(), "0".to_string()),
+            (REMOVED_EQUALITY_DELETES.to_string(), "0".to_string()),
+        ]
+        .into_iter()
+        .collect();
+
+        let summary = Summary {
+            operation: Operation::Overwrite,
+            additional_properties: new_props,
+        };
+
+        let updated = update_snapshot_summaries(summary, Some(&previous_summary), false).unwrap();
+
+        assert_eq!(
+            updated.additional_properties.get(TOTAL_DATA_FILES).unwrap(),
+            "1"
+        );
+        assert_eq!(
+            updated
+                .additional_properties
+                .get(TOTAL_DELETE_FILES)
+                .unwrap(),
+            "3"
+        );
+        assert_eq!(
+            updated.additional_properties.get(TOTAL_RECORDS).unwrap(),
+            "997"
+        );
+        assert_eq!(
+            updated.additional_properties.get(TOTAL_FILE_SIZE).unwrap(),
+            "1000"
+        );
+        assert_eq!(
+            updated
+                .additional_properties
+                .get(TOTAL_POSITION_DELETES)
+                .unwrap(),
+            "3"
+        );
+        assert_eq!(
+            updated
+                .additional_properties
+                .get(TOTAL_EQUALITY_DELETES)
+                .unwrap(),
+            "0"
         );
     }
 

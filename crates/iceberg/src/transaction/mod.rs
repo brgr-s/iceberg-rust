@@ -55,6 +55,7 @@ mod action;
 pub use action::*;
 mod append;
 mod delete_aware;
+mod expire_snapshots;
 mod manifest_filter;
 mod rewrite_files;
 mod snapshot;

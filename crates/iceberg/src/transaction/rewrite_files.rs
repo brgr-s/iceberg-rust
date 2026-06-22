@@ -221,11 +221,11 @@ impl SnapshotProduceOperation for RewriteFilesOperation {
 
         let mut out = self
             .data_filter
-            .filter_manifests(snapshot_produce, data)
+            .filter_manifests(snapshot_produce, data, true)
             .await?;
         out.extend(
             self.delete_filter
-                .filter_manifests(snapshot_produce, deletes)
+                .filter_manifests(snapshot_produce, deletes, true)
                 .await?,
         );
 

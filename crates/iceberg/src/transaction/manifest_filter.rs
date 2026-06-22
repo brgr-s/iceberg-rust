@@ -15,9 +15,9 @@
 // specific language governing permissions and limitations
 // under the License.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
-use crate::error::Result;
+use crate::error::{Error, Result};
 use crate::spec::{DataFile, ManifestFile, ManifestStatus};
 use crate::transaction::snapshot::SnapshotProducer;
 
@@ -36,7 +36,7 @@ use crate::transaction::snapshot::SnapshotProducer;
 #[derive(Debug, Default)]
 pub(crate) struct ManifestFilterManager {
     /// Files to drop, keyed by file path. `DataFile` covers both data and delete files.
-    deleted_files: HashMap<String, DataFile>,
+    delete_files: HashMap<String, DataFile>,
 }
 
 impl ManifestFilterManager {
@@ -47,20 +47,19 @@ impl ManifestFilterManager {
     /// recording the same path more than once keeps a single removal entry.
     #[allow(unused)]
     pub(crate) fn delete_file(&mut self, file: DataFile) {
-        self.deleted_files
-            .insert(file.file_path().to_string(), file);
+        self.delete_files.insert(file.file_path().to_string(), file);
     }
 
     /// Returns `true` if no files are recorded for removal.
     #[allow(unused)]
     pub(crate) fn is_empty(&self) -> bool {
-        self.deleted_files.is_empty()
+        self.delete_files.is_empty()
     }
 
     /// Returns `true` if the file at `path` is recorded for removal.
     #[allow(unused)]
     pub(crate) fn is_removed(&self, path: &str) -> bool {
-        self.deleted_files.contains_key(path)
+        self.delete_files.contains_key(path)
     }
 
     /// Rewrite the given `manifests`, dropping any entries recorded for removal and
@@ -84,11 +83,19 @@ impl ManifestFilterManager {
         &mut self,
         sp: &mut SnapshotProducer<'_>,
         manifests: Vec<ManifestFile>,
+        fail_missing_delete_paths: bool,
     ) -> Result<Vec<ManifestFile>> {
         // Nothing recorded for removal: every manifest is carried forward verbatim.
-        if self.deleted_files.is_empty() {
+        if self.delete_files.is_empty() {
             return Ok(manifests);
         }
+
+        // The paths for all files the requestion operation wants to delete.
+        // We remove every entry from this set that still exists is the manifests.
+        // If this set is not empty after iterating over all entries, we know a file
+        // that the operation wants to remove is missing. If `fail_missing_delete_paths`
+        // is set by the calling operation, we return failure.
+        let mut pending_deletes: HashSet<String> = self.delete_files.keys().cloned().collect();
 
         let file_io = sp.table.file_io().clone();
         let mut filtered = Vec::with_capacity(manifests.len());
@@ -115,8 +122,10 @@ impl ManifestFilterManager {
                 if entry.status() == ManifestStatus::Deleted {
                     continue;
                 }
-                // Drop entries whose file is being removed by this operation.
+
                 if self.is_removed(entry.file_path()) {
+                    // Drop entries whose file is being removed by this operation.
+                    pending_deletes.remove(entry.file_path());
                     continue;
                 }
 
@@ -135,6 +144,13 @@ impl ManifestFilterManager {
             }
 
             filtered.push(writer.write_manifest_file().await?);
+        }
+
+        if fail_missing_delete_paths && !pending_deletes.is_empty() {
+            return Err(Error::new(
+                crate::ErrorKind::PreconditionFailed,
+                format!("Missing required files to delete: {pending_deletes:?}"),
+            ));
         }
 
         Ok(filtered)
@@ -299,7 +315,7 @@ mod tests {
         manager.delete_file(data_file("test/1.parquet"));
         manager.delete_file(data_file("test/1.parquet"));
 
-        assert_eq!(manager.deleted_files.len(), 1);
+        assert_eq!(manager.delete_files.len(), 1);
     }
 
     #[tokio::test]
@@ -313,7 +329,7 @@ mod tests {
         // Nothing recorded for removal: the manifest must be returned verbatim.
         let mut manager = ManifestFilterManager::default();
         let result = manager
-            .filter_manifests(&mut producer, vec![manifest.clone()])
+            .filter_manifests(&mut producer, vec![manifest.clone()], false)
             .await
             .unwrap();
 
@@ -335,7 +351,7 @@ mod tests {
         manager.delete_file(data_file("data/b.parquet"));
 
         let result = manager
-            .filter_manifests(&mut producer, vec![manifest])
+            .filter_manifests(&mut producer, vec![manifest], false)
             .await
             .unwrap();
 
@@ -361,7 +377,7 @@ mod tests {
         manager.delete_file(data_file("data/b.parquet"));
 
         let result = manager
-            .filter_manifests(&mut producer, vec![original.clone()])
+            .filter_manifests(&mut producer, vec![original.clone()], false)
             .await
             .unwrap();
 
